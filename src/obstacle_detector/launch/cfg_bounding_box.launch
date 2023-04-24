@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch" />
+    <node pkg="obstacle_detector" type="cfg_bounding_box" name="cfg_bounding_box"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find obstacle_detector)/rviz/cfg_bounding_box.rviz"/>
+</launch>
