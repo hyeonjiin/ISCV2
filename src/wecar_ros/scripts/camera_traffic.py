@@ -27,7 +27,7 @@ class IMGParser2:
         self.is_imu = False
         self.gps_imu = False
         self.proj_UTM = Proj(proj='utm',zone=52,ellps='WGS84', preserve_units = False)
-        self.num=0
+        self.num=1
         self.crop_pts = np.array(
             [[
             [300,220],
@@ -60,13 +60,19 @@ class IMGParser2:
             lower_green = np.array([50, 100, 100])
             upper_green = np.array([80, 255, 255])
 
+            lower_yellow = np.array([30, 150, 150])
+            upper_yellow= np.array([40, 200, 200])
+
 
 
             mask1 = cv2.inRange(hsv, lower_red, upper_red)
+            mask2 = cv2.inRange(hsv,lower_yellow, upper_yellow)
             mask3 = cv2.inRange(hsv, lower_green, upper_green)
 
+            combined_mask = cv2.bitwise_or(mask1, mask2)
 
-            res = cv2.bitwise_and(self.warped_img2,self.warped_img2, mask=mask1)
+            res = cv2.bitwise_and(self.warped_img2,self.warped_img2, mask=combined_mask)
+            #res3 = cv2.bitwise_and(self.warped_img2,self.warped_img2, mask=mask2)
             res2 = cv2.bitwise_and(self.warped_img2,self.warped_img2, mask=mask3)
 
             #빨간불, 노란불
@@ -76,7 +82,6 @@ class IMGParser2:
             circles = cv2.HoughCircles(cimg, cv2.HOUGH_GRADIENT, 1, 30, param1=60, param2=10, minRadius=0, maxRadius=10)
             if circles is not None:
                 self.num=1
-                print('멈춰')
 
             #초록불
             img2 = cv2.medianBlur(res2, 5)
@@ -85,14 +90,13 @@ class IMGParser2:
             circles2 = cv2.HoughCircles(cimg2, cv2.HOUGH_GRADIENT, 1, 30, param1=60, param2=10, minRadius=0, maxRadius=10)
             if circles2 is not None:
                 self.num=0
-                print('가자')
             
             
             self.traffic_callback(self.num)
             
-            cv2.imshow('res', res)
-            cv2.imshow('res2', res2)
-            cv2.imshow("Image window",self.mask)
+            #cv2.imshow('res', res)
+            #cv2.imshow('res2', res2)
+            #cv2.imshow("Image window",self.mask)
             cv2.waitKey(1)
         else:
             cv2.destroyAllWindows()
@@ -140,8 +144,10 @@ class IMGParser2:
     
     def traffic_callback(self,num) :
         if num==1:
+            print('멈춰')
             self.ctrl_msg.brake = 1
         else:
+            print('가자')
             self.ctrl_msg.brake = 0
             
         self.traffic_pub.publish(self.ctrl_msg)

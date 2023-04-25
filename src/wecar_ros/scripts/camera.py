@@ -12,12 +12,14 @@ from slidewindow import SlideWindow
 from morai_msgs.msg import CtrlCmd
 import tf
 from std_msgs.msg import Float64,Int16,Float32MultiArray
+from nav_msgs.msg import Path,Odometry
 
 class IMGParser:
     def __init__(self):
     
         self.image_sub = rospy.Subscriber("/image_jpeg/compressed", CompressedImage, self.callback)
         self.gps_sub = rospy.Subscriber("/gps", GPSMessage, self.navsat_callback)
+        self.odom_sub = rospy.Subscriber("/odom", Odometry, self.odom_callback)
         self.initialized = False
         self.bridge = CvBridge()
         self.slidewindow = SlideWindow()
@@ -25,6 +27,9 @@ class IMGParser:
         self.ctrl_msg = CtrlCmd()
         self.steering_angle = 0.0
         self.last_steering=0.0
+        self.error=0
+        self.num = 0
+        self.odom_msg = Odometry()
         # self.crop_pts = np.array(
         #     [[
         #     [0,420],
@@ -33,10 +38,9 @@ class IMGParser:
         #     [640,400]
         #     ]]
         # )
-        self.num=0
         rospy.spin()
     def callback(self, msg):
-        if self.lat == 0 and self.lon ==0:
+        if self.lat == 0 and self.lon ==0 and self.num==1:
             try:
                 img_bgr = self.bridge.compressed_imgmsg_to_cv2(msg)
             except CvBridgeError as e:
@@ -57,7 +61,7 @@ class IMGParser:
             # else:
             #     img_concat = np.concatenate([img_bgr,cv2.cvtColor(self.mask, cv2.COLOR_GRAY2BGR)],axis=1)
             img_warp = self.warp_image(img_bgr)
-            img_warp2= self.warp_image2(img_bgr)
+
             # if self.initialized == False:
             #     cv2.namedWindow("Simulator_Image", cv2.WINDOW_NORMAL) 
             #     cv2.createTrackbar('low_H', 'Simulator_Image', 50, 255, self.nothing)
@@ -92,7 +96,6 @@ class IMGParser:
             # upper_lane = np.array([high_H, high_S, high_V])
 
             lane_image = cv2.inRange(img_warp, lower_lane, upper_lane)
-            front_image = cv2.inRange(img_warp2,lower_lane, upper_lane)
 
 
             #lane_image = cv2.inRange(img_warp, lower_lane, upper_lane)
@@ -101,6 +104,8 @@ class IMGParser:
             self.lane_detection(lane_image)
 
             cv2.waitKey(1)
+        if self.odom_msg.pose.pose.position.x>=402456.5 and self.odom_msg.pose.pose.position.x<=402458.2 and self.odom_msg.pose.pose.position.y>=4133026.2 and self.odom_msg.pose.pose.position.y<=4133029:
+            self.num=1
 
     def lane_detection(self, lane_image) :
         kernel_size = 5
@@ -108,9 +113,15 @@ class IMGParser:
         #warped_img = self.warper.warp(blur_img)
         #cv2.imshow("warped_img", lane_image)
         self.slide_img, self.slide_x_location, self.current_lane_window = self.slidewindow.slidewindow(lane_image)
-        print('slide---------------',self.slide_x_location)
-        cv2.imshow("slide_img", self.slide_img)
+        print('S자 mission slide---------------',self.slide_x_location,)
+        if self.slide_x_location < 0 or self.slide_x_location>640:
+            self.slide_x_location = 420
+            self.error=1
+        #cv2.imshow("slide_img", self.slide_img)
         if self.slide_x_location!=0:
+            print(self.error)
+            if self.error==1 and self.slide_x_location<320:
+                self.slide_x_location = 420
             self.steering_angle = (self.slide_x_location - 320)*0.003*-1
             self.last_steering=self.steering_angle
         
@@ -121,6 +132,8 @@ class IMGParser:
         self.ctrl_msg.velocity = 4
         self.ctrl_msg.longlCmdType=2
         self.camera_pub.publish(self.ctrl_msg)
+
+
         
         # print(steering_angle)
         #rospy.loginfo("CURRENT LANE WINDOW: {}".format(self.current_lane_window))
@@ -159,19 +172,6 @@ class IMGParser:
         
         return warped_img
     
-    def warp_image2(self,img):
-        image_size = (img.shape[1],img.shape[0])
-
-        H = 480 #480
-        W = 640#640
-        source_points= np.float32([[210, 350], [270, 350], [240, 340], [270, 340]])#좌하, 우하, 좌상, 우상
-        destination_points = np.float32([[50, H-100], [W, H-100], [50, 0], [W, 0]])
-
-        perspective_transform = cv2.getPerspectiveTransform(source_points,destination_points)
-        warped_img = cv2.warpPerspective(img,perspective_transform, image_size, flags=cv2.INTER_LINEAR)
-        
-        return warped_img
-    
     def lane_callback(self) :
         
         self.ctrl_msg.steering = self.steering_angle
@@ -188,6 +188,9 @@ class IMGParser:
         self.longitude = gps_msg.longitude
         self.lat = gps_msg.latitude
         self.lon = gps_msg.longitude
+    
+    def odom_callback(self,data):
+        self.odom_msg=data
       
 
 if __name__ == '__main__':

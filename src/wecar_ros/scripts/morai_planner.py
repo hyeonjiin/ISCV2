@@ -34,6 +34,7 @@ class morai_planner():
         self.odom_pub = rospy.Publisher("/odom", Odometry, queue_size= 1)
         self.camera_sub = rospy.Subscriber("/camera_steering",CtrlCmd,self.line_callback)
         self.traffic_sub = rospy.Subscriber("/camera_traffic", CtrlCmd,self.traffic_callback)
+        self.corner_sub = rospy.Subscriber("/corner_steering", CtrlCmd,self.corner_callback)
         self.br = tf.TransformBroadcaster()
     
         self.x, self.y = None, None
@@ -67,14 +68,17 @@ class morai_planner():
         #camera lane
         self.camera_lane_msg = CtrlCmd()
         self.camera_lane_msg.longlCmdType=2
-        self.lane_steering = 0.0
-        self.lane_velocity = 4.0
+       
 
         #traffic
         self.traffic_msg = CtrlCmd()
         self.camera_lane_msg.longlCmdType=2
-        self.lane_steering = 0.0
-        self.lane_velocity = 0.0
+
+        
+        #corner lane
+        self.corner_lane_msg = CtrlCmd()
+        self.corner_lane_msg.longlCmdType=2
+
 
         #t자 주차 후진, 전진
         self.is_rear = False
@@ -105,11 +109,12 @@ class morai_planner():
         rate = rospy.Rate(30) # 30hz
 
         while not rospy.is_shutdown():
-            print('current 위치 : ',self.odom_msg.pose.pose.position.x, self.odom_msg.pose.pose.position.y )
+            
             local_path,self.current_waypoint=findLocalPath(self.global_path,self.odom_msg,self.future_waypoint)
+            print('current 위치 : ',self.odom_msg.pose.pose.position.x, self.odom_msg.pose.pose.position.y, self.current_waypoint )
 
             self.convertLL2UTM() 
-            pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
+            pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용.camera_lane_msg
             pure_pursuit.getEgoStatus(self.odom_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
             
             self.steering,self.error=pure_pursuit.steering_angle(self.velocity,self.error)
@@ -120,10 +125,9 @@ class morai_planner():
             #S자 주행, ㄱ자
             if self.lat==0 and self.lon==0:
                 if self.dark == 0:
-                    self.darkness()
-                    self.dark=1
+                    #self.darkness()
+                    self.ctrl_cmd_pub.publish(self.corner_lane_msg)
                 else:
-                    self.camera_lane_msg.velocity = 4.0
                     self.ctrl_cmd_pub.publish(self.camera_lane_msg)
             
             else:
@@ -131,7 +135,7 @@ class morai_planner():
                     if abs(self.steering)>=0.25:
                         self.velocity = 8
                     else:
-                        self.velocity=13
+                        self.velocity=15
                     self.ctrl_cmd_msg.steering = self.steering
                     self.ctrl_cmd_msg.velocity = self.velocity
                     self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)    
@@ -163,6 +167,7 @@ class morai_planner():
             #신호등
                 #직진
             if self.odom_msg.pose.pose.position.x>=402456.5 and self.odom_msg.pose.pose.position.x<=402458.2 and self.odom_msg.pose.pose.position.y>=4133026.2 and self.odom_msg.pose.pose.position.y<=4133029:
+                self.dark=1
                 if self.traffic_msg.brake == 1 :
                     self.traffic_msg.velocity = 0
                     self.ctrl_cmd_pub.publish(self.traffic_msg)
@@ -180,8 +185,11 @@ class morai_planner():
                     self.service_client(self.request_srv)
                     self.ctrl_cmd_pub.publish(self.traffic_msg)
                 else:
+                    self.control_change()
+                    self.request_srv.request.lamps.turnSignal = 1
                     self.ctrl_cmd_msg.steering = self.steering
                     self.ctrl_cmd_msg.velocity = 13
+                    self.service_client(self.request_srv)
                     self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)
                 #좌회전후 신호 끄기
             if self.odom_msg.pose.pose.position.x>=402445 and self.odom_msg.pose.pose.position.x<=402448 and self.odom_msg.pose.pose.position.y>=4133036 and self.odom_msg.pose.pose.position.y<=4133039:
@@ -199,13 +207,13 @@ class morai_planner():
                     self.ctrl_cmd_msg.velocity = 13
                     self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)    
             #가속
-            if self.odom_msg.pose.pose.position.x>=402410 and self.odom_msg.pose.pose.position.x<=402413.3 and self.odom_msg.pose.pose.position.y>=4133072.0 and self.odom_msg.pose.pose.position.y<=4133073.6:  
+            if self.odom_msg.pose.pose.position.x>=402410 and self.odom_msg.pose.pose.position.x<=402413.3 and self.odom_msg.pose.pose.position.y>=4133073.4 and self.odom_msg.pose.pose.position.y<=4133075.0:  
                 self.ctrl_cmd_msg.longlCmdType=1
                 self.ctrl_cmd_msg.accel=0.7
                 self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)    
             
             #감속
-            if self.odom_msg.pose.pose.position.x>=402404 and self.odom_msg.pose.pose.position.x<=402406 and self.odom_msg.pose.pose.position.y>=4133038.0 and self.odom_msg.pose.pose.position.y<=4133040.0:  
+            if self.odom_msg.pose.pose.position.x>=402404 and self.odom_msg.pose.pose.position.x<=402408 and self.odom_msg.pose.pose.position.y>=4133043.0 and self.odom_msg.pose.pose.position.y<=4133046.0:  
                 self.ctrl_cmd_msg.longlCmdType=2
                 self.ctrl_cmd_msg.steering = self.steering
                 self.ctrl_cmd_msg.velocity = self.velocity
@@ -270,6 +278,29 @@ class morai_planner():
                 self.past_error=0
                 self.future_waypoint = 0
             
+            if self.current_waypoint >= 2200 and self. current_waypoint<=2219:
+                self.control_change()
+                self.request_srv.request.lamps.turnSignal = 2
+                self.service_client(self.request_srv)
+            
+            # 종료전 우측 깜박이 켜기
+            if self.current_waypoint >= 2200 and self. current_waypoint<=2219:
+                self.control_change()
+                self.request_srv.request.lamps.turnSignal = 2
+                self.service_client(self.request_srv)
+            
+            #종료 후 parking으로 바꾸기
+            if self.current_waypoint>=2240:
+                self.ctrl_cmd_msg.brake = 1
+                self.ctrl_cmd_msg.velocity=0
+                self.ctrl_cmd_msg.steering=0
+                self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)  
+                
+                self.request_srv.request.option = 2
+                self.request_srv.request.gear=1
+                self.service_client(self.request_srv)
+
+
             
             
                     
@@ -312,7 +343,7 @@ class morai_planner():
             time.sleep(1)
         for i in range(2):
             self.ctrl_cmd_msg.steering = 0.0
-            self.ctrl_cmd_msg.velocity = 4
+            self.ctrl_cmd_msg.velocity = 4.5
             self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)
             time.sleep(1)
         for i in range(7):
@@ -379,11 +410,16 @@ class morai_planner():
     
     def line_callback(self, data):
         self.camera_lane_msg.steering = data.steering
-        self.camera_lane_msg.velocity = self.lane_velocity
+        self.camera_lane_msg.velocity = data.velocity
     
     def traffic_callback(self, data):
 
         self.traffic_msg.brake = data.brake
+    
+    def corner_callback(self, data):
+        self.corner_lane_msg.steering = data.steering
+        self.corner_lane_msg.velocity = data.velocity
+
 
 
 if __name__ == '__main__':
