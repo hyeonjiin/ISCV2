@@ -1,6 +1,8 @@
 <launch>
         <!-- args = "(추종할 경로 이름)" -->
-	<node pkg="wecar_ros" type="wecar_planner2.py" name="planner" args="path9" output="screen" />
-	<node pkg="wecar_ros" type="lidar.py" name="lidar_parser"  />
-        <node pkg="rviz" type="rviz" name="rviz" args="-d $(find wecar_ros)/rviz/planner.rviz" />
+	<node pkg="wecar_ros" type="morai_planner.py" args="final_lap" name="planner"/>
+	<node pkg="wecar_ros" type="camera.py" name="camera_course"/>
+	<node pkg="wecar_ros" type="camera_S.py" name="camera_S_course"/>
+	<node pkg="wecar_ros" type="camera_traffic.py" name="camera_traffic_course"/>
+
 </launch>
