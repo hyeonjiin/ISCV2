@@ -111,7 +111,7 @@ class IMGParser3:
             #cv2.imshow("Lane Image",lane_image)
             #print(pixel_count)
 
-            cv2.waitKey(1)
+            #cv2.waitKey(1)
         
         if self.odom_msg.pose.pose.position.x>=402456.5 and self.odom_msg.pose.pose.position.x<=402458.2 and self.odom_msg.pose.pose.position.y>=4133026.2 and self.odom_msg.pose.pose.position.y<=4133029:
             self.num=1

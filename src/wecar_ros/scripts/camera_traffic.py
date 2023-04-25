@@ -21,8 +21,9 @@ class IMGParser2:
     
         self.image_sub = rospy.Subscriber("/image_jpeg/compressed", CompressedImage, self.callback)
         self.traffic_pub= rospy.Publisher('/camera_traffic', CtrlCmd, queue_size=1)
-        self.gps_sub = rospy.Subscriber("/gps", GPSMessage, self.navsat_callback)
+        self.odom_sub = rospy.Subscriber("/odom", Odometry, self.odom_callback)
         self.ctrl_msg = CtrlCmd()
+        self.odom_msg = Odometry()
         self.x, self.y = None, None
         self.is_imu = False
         self.gps_imu = False
@@ -97,9 +98,9 @@ class IMGParser2:
             #cv2.imshow('res', res)
             #cv2.imshow('res2', res2)
             #cv2.imshow("Image window",self.mask)
-            cv2.waitKey(1)
-        else:
-            cv2.destroyAllWindows()
+            #cv2.waitKey(1)
+        # else:
+        #     cv2.destroyAllWindows()
 
     
     def mask_roi(self, img):
@@ -152,38 +153,8 @@ class IMGParser2:
             
         self.traffic_pub.publish(self.ctrl_msg)
 
-    def navsat_callback(self, gps_msg):
-        self.gps_imu = True
-        
-        self.latitude = gps_msg.latitude
-        self.longitude = gps_msg.longitude
-        self.lat = gps_msg.latitude
-        self.lon = gps_msg.longitude
-        
-        self.convertLL2UTM()
-        
-        
-        br = tf.TransformBroadcaster()
-        br.sendTransform((self.x, self.y, 0),
-                        tf.transformations.quaternion_from_euler(0, 0, 0),
-                        rospy.Time.now(),
-                        "gps",
-                        "map")
-        
-        self.utm_msg = Float32MultiArray()
-        
-        self.utm_msg.data = [self.x , self.y]
-        
-        self.odom_msg.pose.pose.position.x = self.x
-        self.odom_msg.pose.pose.position.y = self.y
-        self.odom_msg.pose.pose.position.z = 0
-        
-    
-    def convertLL2UTM(self):
-        
-        xy_zone = self.proj_UTM(self.lon, self.lat)
-        self.x = xy_zone[0]
-        self.y = xy_zone[1]
+    def odom_callback(self,data):
+        self.odom_msg=data
             
 
 if __name__ == '__main__':

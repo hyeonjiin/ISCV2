@@ -238,7 +238,7 @@ class morai_planner():
                     if self.is_rear == True :
                         self.gear_change(self.error)
                         self.ctrl_cmd_msg.steering = self.steering*-1
-                        self.ctrl_cmd_msg.velocity = 1
+                        self.ctrl_cmd_msg.velocity = 3
                         self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)
                     elif self.is_rear == False :
                         self.velocity = 0
